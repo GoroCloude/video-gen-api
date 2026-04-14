@@ -14,6 +14,9 @@ const docsRoute     = require('./routes/docs');
 
 const app = express();
 
+// Trust Cloudflare / reverse-proxy headers so rate limiting identifies clients by real IP
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
