@@ -1,0 +1,187 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "video-gen-api",
+    "description": "Image + text → ElevenLabs TTS → FFmpeg → MP4 → MinIO presigned URL.\n\nSet the `baseUrl` collection variable to your server address before running (default: `http://localhost:3000`).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Base URL of the running video-gen-api server"
+    }
+  ],
+  "item": [
+    {
+      "name": "Generate video",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/generate",
+          "host": ["{{baseUrl}}"],
+          "path": ["generate"]
+        },
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": "",
+              "description": "JPEG or PNG source image (max 20 MB). Click the file icon on the right to choose a file."
+            },
+            {
+              "key": "text",
+              "value": "Welcome to Munich. This city has over 1.5 million residents and world-class beer gardens.",
+              "type": "text",
+              "description": "Script — spoken as TTS and shown as burned-in captions."
+            },
+            {
+              "key": "effect",
+              "value": "none",
+              "type": "text",
+              "disabled": true,
+              "description": "Optional motion effect. Values: none | zoom-in | zoom-out | pan-left | pan-right | ken-burns | shake. Overrides VIDEO_EFFECT env var for this request."
+            }
+          ]
+        },
+        "description": "Accepts a source image and a text script. Returns a presigned MinIO URL pointing to the generated MP4.\n\n**Steps the API runs:**\n1. ElevenLabs TTS (falls back to Google TTS)\n2. ffprobe — measure audio duration\n3. SRT captions (8 words/cue, evenly timed)\n4. FFmpeg — still image + audio + burned-in subtitles → MP4\n5. MinIO upload → presigned GET URL\n\n**Typical response time:** 10–60 s depending on text length."
+      },
+      "response": [
+        {
+          "name": "200 — Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"url\": \"https://minio.example.com/videos/generated/550e8400-e29b-41d4-a716-446655440000.mp4?X-Amz-Signature=abc123\",\n  \"key\": \"generated/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"bucket\": \"videos\",\n  \"duration\": 8.42,\n  \"expiresIn\": 3600\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — Missing image",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Missing field: image\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — Missing text",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Missing field: text\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "413 — Image too large",
+          "status": "Payload Too Large",
+          "code": 413,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Image too large (max 20 MB)\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "415 — Wrong file type",
+          "status": "Unsupported Media Type",
+          "code": 415,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Only image files are accepted\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "429 — Rate limited",
+          "status": "Too Many Requests",
+          "code": 429,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Too many requests \u2014 please try again later\"\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "Combine videos",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/combine",
+          "host": ["{{baseUrl}}"],
+          "path": ["combine"]
+        },
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"urls\": [\n    \"https://minio.example.com/videos/generated/uuid-1.mp4?X-Amz-Signature=abc\",\n    \"https://minio.example.com/videos/generated/uuid-2.mp4?X-Amz-Signature=def\"\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "description": "Concatenates multiple MP4 videos into one and returns a presigned MinIO URL.\n\nReplace the example URLs with real presigned URLs from `POST /generate` responses.\n\n**Requirements:**\n- 2–20 URLs\n- All videos must share the same codec and resolution (all `/generate` outputs qualify)\n- Uses stream copy — no re-encoding, very fast"
+      },
+      "response": [
+        {
+          "name": "200 — Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"url\": \"https://minio.example.com/videos/combined/550e8400-e29b-41d4-a716-446655440000.mp4?X-Amz-Signature=abc123\",\n  \"key\": \"combined/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"bucket\": \"videos\",\n  \"duration\": 27.84,\n  \"expiresIn\": 3600,\n  \"videoCount\": 2\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — Too few URLs",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"At least 2 URLs are required to combine\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — Download failed",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"error\": \"Failed to download video (https://…): HTTP 403\"\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "header": [],
+        "description": "Returns the active TTS provider chain and video output dimensions. Does not ping MinIO or TTS providers — safe to call frequently."
+      },
+      "response": [
+        {
+          "name": "200 — OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"status\": \"ok\",\n  \"tts\": \"elevenlabs+google-fallback\",\n  \"video\": \"1080x1920\"\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "OpenAPI spec (JSON)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api-docs/json",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-docs", "json"]
+        },
+        "header": [],
+        "description": "Returns the raw OpenAPI 3.0.3 specification as JSON. Use this to import the spec into Postman directly:\n\n**Import from URL:** Postman → Import → Link → `{{baseUrl}}/api-docs/json`"
+      }
+    }
+  ]
+}
