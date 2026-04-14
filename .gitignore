@@ -5,6 +5,7 @@ node_modules/
 *.wav
 
 # credentials
+secrets/
 *.json.key
 client_secret*.json
 *credentials*.json

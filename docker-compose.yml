@@ -1,0 +1,20 @@
+services:
+  image2video:
+    build: .
+    container_name: image2video
+    env_file: .env
+    ports:
+      - "3100:3000"
+    volumes:
+      # Mount Google service-account key — path inside container must match
+      # GOOGLE_APPLICATION_CREDENTIALS in .env (e.g. /secrets/google-tts.json)
+      - ./secrets:/secrets:ro
+    restart: unless-stopped
+    networks:
+      - nca-network
+
+networks:
+  # Reuse the existing MinIO network so the app can reach minio:9002 directly
+  nca-network:
+    external: true
+    name: nca-toolkit_nca-network
