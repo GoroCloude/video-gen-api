@@ -10,12 +10,16 @@ const spec = {
   openapi: '3.0.3',
   info: {
     title: 'video-gen-api',
-    version: '2.2.0',
+    version: '2.3.0',
     description:
-      'Accepts an image and a text script and returns a presigned MP4 download URL.\n\n' +
-      '**Pipeline**\n\n' +
-      '`POST /generate` → ElevenLabs TTS (Google TTS fallback) → ffprobe duration → ' +
-      'SRT captions → FFmpeg compose → MinIO upload → presigned URL\n\n' +
+      'Generates MP4 videos from an image or video clip, a text script, and TTS audio.\n\n' +
+      '**Endpoints**\n\n' +
+      '- `POST /generate` — still image + script → looping image video with TTS + captions\n' +
+      '- `POST /generate-video` — video clip + script → video with TTS audio + captions overlay\n' +
+      '- `POST /combine` — list of MP4 URLs → concatenated MP4 (stream copy, no re-encode)\n\n' +
+      '**Pipeline** (generate and generate-video)\n\n' +
+      'ElevenLabs TTS (Google TTS fallback) → ffprobe duration → ' +
+      'SRT captions → FFmpeg compose → MinIO upload → permanent public URL\n\n' +
       '**Motion effects** — `effect` field (per-request) or `VIDEO_EFFECT` env var (server default):\n\n' +
       '| Value | Motion |\n|---|---|\n' +
       '| `none` | Static image |\n' +
@@ -141,6 +145,113 @@ const spec = {
               'RateLimit-Remaining': { schema: { type: 'integer' }, description: 'Requests remaining in the current window' },
               'RateLimit-Reset':     { schema: { type: 'integer' }, description: 'Seconds until the window resets' },
             },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+                example: { error: 'Too many requests — please try again later' },
+              },
+            },
+          },
+          500: {
+            description: 'Internal error — TTS failure, FFmpeg error, or MinIO upload failure.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+                example: { error: 'ffmpeg exited with code 1' },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    '/generate-video': {
+      post: {
+        summary: 'Generate a video from a video clip',
+        description:
+          'Accepts an existing video and a text script. Replaces the video\'s audio with TTS ' +
+          'generated from `text`, burns in captions, and scales/pads the output to the configured ' +
+          'dimensions (`VIDEO_WIDTH` × `VIDEO_HEIGHT`).\n\n' +
+          'The output stops at whichever ends first — the source video or the TTS audio (`-shortest`).\n\n' +
+          'Synchronous — the response is returned only after the MP4 is uploaded to MinIO.\n\n' +
+          'Expect **15–90 s** depending on clip length, TTS latency, and server load.',
+        operationId: 'generateFromVideo',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['video', 'text'],
+                properties: {
+                  video: {
+                    type: 'string',
+                    format: 'binary',
+                    description:
+                      'Source video file (MP4, MOV, WebM, etc.).\n\n' +
+                      'Max size: 500 MB by default (configurable via `UPLOAD_MAX_VIDEO_SIZE_BYTES`).',
+                  },
+                  text: {
+                    type: 'string',
+                    minLength: 1,
+                    description:
+                      'Voiceover script — spoken as TTS and burned in as captions.\n\n' +
+                      'Captions are split into 8-word cues distributed evenly over the audio duration.',
+                    example: 'The historic city centre dates back over 800 years and draws millions of visitors each year.',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Video composed and uploaded successfully.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GenerateSuccess' },
+                example: {
+                  success: true,
+                  url: 'https://minio.shumov.eu/videos/generated/550e8400-e29b-41d4-a716-446655440001.mp4',
+                  key: 'generated/550e8400-e29b-41d4-a716-446655440001.mp4',
+                  bucket: 'videos',
+                  duration: 12.15,
+                },
+              },
+            },
+          },
+          400: {
+            description: 'Validation error — missing required field.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+                examples: {
+                  missingVideo: { summary: 'No video uploaded', value: { error: 'Missing field: video' } },
+                  missingText:  { summary: 'No text provided',  value: { error: 'Missing field: text'  } },
+                },
+              },
+            },
+          },
+          413: {
+            description: 'Video exceeds the configured size limit.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+                example: { error: 'File too large' },
+              },
+            },
+          },
+          415: {
+            description: 'Uploaded file is not a video.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+                example: { error: 'Only video files are accepted' },
+              },
+            },
+          },
+          429: {
+            description: 'Rate limit exceeded (default: 10 requests / 60 s per IP).',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/Error' },
