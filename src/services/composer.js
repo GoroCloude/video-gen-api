@@ -10,6 +10,7 @@ const { width, height, durationFallback } = config.video;
 const { fontSize, primaryColour, outlineColour, position, marginV, marginH } = config.captions;
 
 const OUTPUT_FPS = 25;
+const FADE_IN_DURATION = 0.3; // seconds — applied at the start of every /generate output
 
 // For any motion effect the source image is pre-scaled to OVERSCAN × the output
 // dimensions so zoompan can crop and animate without ever upscaling above the
@@ -75,7 +76,7 @@ function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds,
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
     const activeEffect = effectOverride ?? config.video.effect;
-    const videoFilter = buildVideoFilter(srtPath, durationSeconds, activeEffect);
+    const videoFilter = buildVideoFilter(srtPath, durationSeconds, activeEffect, true);
 
     const proc = ffmpeg()
       .input(imagePath)
@@ -115,7 +116,7 @@ function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds,
 // Filter chain builder
 // ---------------------------------------------------------------------------
 
-function buildVideoFilter(srtPath, durationSeconds, effect) {
+function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false) {
   const hasMotion = effect !== 'none';
 
   // Pre-scale: 1× for static, OVERSCAN× for motion (gives zoompan room to work)
@@ -137,13 +138,16 @@ function buildVideoFilter(srtPath, durationSeconds, effect) {
     `MarginV=${marginV},` +
     `MarginH=${marginH}'`;
 
+  // Fade placed after subtitles so captions and video fade in together
+  const fadeFilter = fadeIn ? `,fade=type=in:start_time=0:duration=${FADE_IN_DURATION}` : '';
+
   if (!hasMotion) {
-    return `${scaleFilter},${subtitleFilter}`;
+    return `${scaleFilter},${subtitleFilter}${fadeFilter}`;
   }
 
   const totalFrames = Math.ceil(durationSeconds * OUTPUT_FPS);
   const motionFilter = buildMotionFilter(totalFrames, effect);
-  return `${scaleFilter},${motionFilter},${subtitleFilter}`;
+  return `${scaleFilter},${motionFilter},${subtitleFilter}${fadeFilter}`;
 }
 
 /**
