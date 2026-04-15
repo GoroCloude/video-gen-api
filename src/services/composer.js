@@ -234,6 +234,59 @@ function buildMotionFilter(totalFrames, effect) {
   }
 }
 
+/**
+ * Compose the final MP4 from an input video, TTS audio, and SRT captions.
+ * Unlike composeVideo, the input is a real video (not a still image) so:
+ *   - no -loop 1
+ *   - no motion effects (the video already moves)
+ *   - video is scaled/padded to the configured output dimensions
+ *   - -shortest stops the output when the shorter of TTS audio or input video ends
+ *
+ * @param {string} videoPath     Path to the source video file
+ * @param {string} audioPath     Path to the TTS .mp3 file
+ * @param {string} srtPath       Path to the .srt captions file
+ * @param {string} outputDir     Temp dir for the output file
+ * @param {number} durationSeconds TTS audio duration (used only to size caption timing — not clamping)
+ * @returns {Promise<string>} Absolute path to the output .mp4 file
+ */
+function overlayVideoWithTTS(videoPath, audioPath, srtPath, outputDir, durationSeconds) {
+  return new Promise((resolve, reject) => {
+    const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
+    const videoFilter = buildVideoFilter(srtPath, durationSeconds, 'none');
+
+    const proc = ffmpeg()
+      .input(videoPath)
+      .input(audioPath)
+      .outputOptions([
+        '-map 0:v',
+        '-map 1:a',
+        '-shortest',
+        '-c:v libx264',
+        '-preset fast',
+        '-crf 23',
+        '-c:a aac',
+        '-b:a 192k',
+        '-pix_fmt yuv420p',
+        '-movflags +faststart',
+        `-vf ${videoFilter}`,
+      ])
+      .output(outPath)
+      .on('start', cmd => logger.debug({ cmd }, 'FFmpeg started'))
+      .on('progress', p => logger.trace({ percent: Math.round(p.percent || 0) }, 'FFmpeg progress'))
+      .on('end', () => {
+        logger.debug({ outPath }, 'FFmpeg done');
+        resolve(outPath);
+      })
+      .on('error', (err, _stdout, stderr) => {
+        logger.error({ err: err.message, stderr }, 'FFmpeg error');
+        proc.kill('SIGKILL');
+        reject(err);
+      });
+
+    proc.run();
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Audio duration probe
 // ---------------------------------------------------------------------------
@@ -277,4 +330,4 @@ function escapePath(p) {
   return "'" + p.replace(/\\/g, '/').replace(/:/g, '\\:') + "'";
 }
 
-module.exports = { composeVideo, getAudioDuration, validateEffect, VALID_EFFECTS };
+module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, VALID_EFFECTS };

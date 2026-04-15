@@ -64,7 +64,8 @@ const config = Object.freeze({
   },
 
   upload: {
-    maxFileSizeBytes: parseInt(optional('UPLOAD_MAX_FILE_SIZE_BYTES', String(20 * 1024 * 1024)), 10),
+    maxFileSizeBytes:      parseInt(optional('UPLOAD_MAX_FILE_SIZE_BYTES',       String(20  * 1024 * 1024)), 10),
+    maxVideoFileSizeBytes: parseInt(optional('UPLOAD_MAX_VIDEO_SIZE_BYTES', String(500 * 1024 * 1024)), 10),
   },
 
   rateLimit: {

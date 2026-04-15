@@ -7,10 +7,11 @@ const { randomUUID } = require('crypto');
 const fs = require('fs');
 const config = require('./config');
 const logger = require('./logger');
-const generateRoute = require('./routes/generate');
-const combineRoute  = require('./routes/combine');
-const healthRoute   = require('./routes/health');
-const docsRoute     = require('./routes/docs');
+const generateRoute      = require('./routes/generate');
+const generateVideoRoute = require('./routes/generateVideo');
+const combineRoute       = require('./routes/combine');
+const healthRoute        = require('./routes/health');
+const docsRoute          = require('./routes/docs');
 
 const app = express();
 
@@ -37,12 +38,14 @@ const limiter = rateLimit({
   message:          { error: 'Too many requests — please try again later' },
 });
 
-app.post('/generate', limiter);
-app.post('/combine',  limiter);
+app.post('/generate',       limiter);
+app.post('/generate-video', limiter);
+app.post('/combine',        limiter);
 
 // Routes
-app.use('/generate', generateRoute);
-app.use('/combine',  combineRoute);
+app.use('/generate',       generateRoute);
+app.use('/generate-video', generateVideoRoute);
+app.use('/combine',        combineRoute);
 app.use('/health',   healthRoute);
 app.use('/api-docs', docsRoute);
 
