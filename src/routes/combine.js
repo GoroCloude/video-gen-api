@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { randomUUID } = require('crypto');
+const { spawn } = require('child_process');
 const axios = require('axios');
-const ffmpeg = require('fluent-ffmpeg');
 const { getAudioDuration } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 const logger = require('../logger');
@@ -151,30 +151,49 @@ function writeConcatList(videoPaths, tmpDir) {
 /**
  * Concatenate the videos listed in concatListPath using the concat demuxer.
  * Uses stream copy (-c copy) — no re-encoding, very fast.
+ *
+ * Uses child_process.spawn instead of fluent-ffmpeg to guarantee the correct
+ * argument order: -f concat and -safe 0 must appear before -i on the command line.
+ *
  * @returns {Promise<string>} Path to the output .mp4 file
  */
 function concatVideos(concatListPath, outputDir) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
 
-    // Convert to forward slashes — FFmpeg cannot open Windows-style backslash paths
-    const inputPath = concatListPath.replace(/\\/g, '/');
+    const args = [
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', concatListPath,
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      '-y',
+      outPath,
+    ];
 
-    ffmpeg()
-      .input(inputPath)
-      .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-c copy', '-movflags +faststart'])
-      .output(outPath)
-      .on('start', cmd => logger.debug({ cmd }, 'FFmpeg concat started'))
-      .on('end', () => {
+    logger.debug({ cmd: `ffmpeg ${args.join(' ')}` }, 'FFmpeg concat started');
+
+    const proc = spawn('ffmpeg', args);
+    const stderrChunks = [];
+    proc.stderr.on('data', chunk => stderrChunks.push(chunk));
+
+    proc.on('close', code => {
+      const stderr = Buffer.concat(stderrChunks).toString();
+      if (code === 0) {
         logger.debug({ outPath }, 'FFmpeg concat done');
         resolve(outPath);
-      })
-      .on('error', (err, _stdout, stderr) => {
-        logger.error({ err: err.message, stderr }, 'FFmpeg concat error');
-        reject(err);
-      })
-      .run();
+      } else {
+        logger.error({ code, stderr }, 'FFmpeg concat error');
+        // Surface the last meaningful FFmpeg error line
+        const errLine = stderr.split('\n').filter(l => /error/i.test(l)).slice(-3).join(' | ');
+        reject(new Error(`ffmpeg exited with code ${code}: ${errLine || stderr.slice(-300)}`));
+      }
+    });
+
+    proc.on('error', err => {
+      logger.error({ err: err.message }, 'Failed to spawn ffmpeg');
+      reject(err);
+    });
   });
 }
 
