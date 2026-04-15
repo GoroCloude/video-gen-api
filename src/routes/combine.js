@@ -17,22 +17,35 @@ const router = Router();
 const MAX_URLS = 20;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB per video
+const DEFAULT_TRANSITION_DURATION = 0.5;    // seconds
+
+// xfade transitions exposed in the API.
+// Full list: https://ffmpeg.org/ffmpeg-filters.html#xfade
+const VALID_TRANSITIONS = [
+  'none',
+  'fade', 'fadeblack', 'fadewhite',
+  'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+  'slideleft', 'slideright', 'slideup', 'slidedown',
+  'dissolve', 'circlecrop', 'circleopen', 'circleclose',
+];
 
 /**
  * POST /combine
- * JSON body: { "urls": ["https://...", "https://...", ...] }
+ * JSON body:
+ *   urls               — ordered array of MP4 URLs to concatenate (2–20)
+ *   transition         — optional xfade transition name (default: "none")
+ *   transitionDuration — optional seconds for the transition (default: 0.5, max: 3)
  *
- * Downloads each video, concatenates them with FFmpeg's concat demuxer,
- * uploads the result to MinIO, and returns a presigned URL.
+ * When transition is "none": uses FFmpeg concat demuxer (stream copy, very fast).
+ * Otherwise: re-encodes with chained xfade (video) + acrossfade (audio) filters.
  *
- * All input videos must have compatible codecs/resolution (all videos produced
- * by this API qualify). Uses stream copy (-c copy) — no re-encoding.
+ * Response: { success, url, key, bucket, duration, videoCount[, transition, transitionDuration] }
  */
 router.post('/', express.json(), async (req, res, next) => {
   const log = req.log;
 
   // --- Validation ---
-  const { urls } = req.body || {};
+  const { urls, transition: transitionRaw, transitionDuration: tdRaw } = req.body || {};
 
   if (!Array.isArray(urls) || urls.length === 0) {
     return res.status(400).json({ error: 'Missing field: urls (must be a non-empty array)' });
@@ -57,6 +70,18 @@ router.post('/', express.json(), async (req, res, next) => {
     }
   }
 
+  const transition = (transitionRaw || 'none').trim();
+  if (!VALID_TRANSITIONS.includes(transition)) {
+    return res.status(400).json({
+      error: `Invalid transition "${transition}". Valid values: ${VALID_TRANSITIONS.join(', ')}`,
+    });
+  }
+
+  const transitionDuration = tdRaw != null ? parseFloat(tdRaw) : DEFAULT_TRANSITION_DURATION;
+  if (isNaN(transitionDuration) || transitionDuration <= 0 || transitionDuration > 3) {
+    return res.status(400).json({ error: 'transitionDuration must be between 0 and 3 seconds' });
+  }
+
   // --- Setup temp dir ---
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcombine-'));
 
@@ -69,9 +94,15 @@ router.post('/', express.json(), async (req, res, next) => {
     log.info('Downloads complete');
 
     // --- Step 2: Concatenate ---
-    log.info('Step 2/3 — Concatenating videos');
-    const concatListPath = writeConcatList(videoPaths, tmpDir);
-    const combinedPath   = await concatVideos(concatListPath, tmpDir);
+    let combinedPath;
+    if (transition === 'none') {
+      log.info('Step 2/3 — Concatenating (stream copy)');
+      const concatListPath = writeConcatList(videoPaths, tmpDir);
+      combinedPath = await concatVideos(concatListPath, tmpDir);
+    } else {
+      log.info({ transition, transitionDuration }, 'Step 2/3 — Concatenating with transitions');
+      combinedPath = await concatWithTransitions(videoPaths, transition, transitionDuration, tmpDir);
+    }
 
     const duration = await getAudioDuration(combinedPath);
     log.info({ duration: +duration.toFixed(2) }, 'Combined video duration');
@@ -83,14 +114,20 @@ router.post('/', express.json(), async (req, res, next) => {
 
     log.info({ key }, 'Combine job complete');
 
-    return res.status(200).json({
+    const body = {
       success:    true,
       url,
       key,
       bucket,
       duration:   Math.round(duration * 100) / 100,
       videoCount: urls.length,
-    });
+    };
+    if (transition !== 'none') {
+      body.transition = transition;
+      body.transitionDuration = transitionDuration;
+    }
+
+    return res.status(200).json(body);
 
   } catch (err) {
     next(err);
@@ -100,7 +137,7 @@ router.post('/', express.json(), async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Download
 // ---------------------------------------------------------------------------
 
 /**
@@ -134,10 +171,13 @@ async function downloadVideo(url, destPath, log) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Concat — stream copy (no transition)
+// ---------------------------------------------------------------------------
+
 /**
- * Write an FFmpeg concat demuxer list file and return its path.
- * Paths use forward slashes only — the concat demuxer file parser does not
- * use the filter-graph parser, so \: escaping is NOT needed (and would break it).
+ * Write an FFmpeg concat demuxer list file.
+ * Forward slashes only — the concat demuxer does not use the filter-graph parser.
  */
 function writeConcatList(videoPaths, tmpDir) {
   const listPath = path.join(tmpDir, 'concat.txt');
@@ -149,29 +189,85 @@ function writeConcatList(videoPaths, tmpDir) {
 }
 
 /**
- * Concatenate the videos listed in concatListPath using the concat demuxer.
- * Uses stream copy (-c copy) — no re-encoding, very fast.
- *
- * Uses child_process.spawn instead of fluent-ffmpeg to guarantee the correct
- * argument order: -f concat and -safe 0 must appear before -i on the command line.
- *
- * @returns {Promise<string>} Path to the output .mp4 file
+ * Concatenate via the concat demuxer. Stream copy — no re-encoding, very fast.
+ * Requires all inputs to share the same codec and resolution.
  */
 function concatVideos(concatListPath, outputDir) {
+  const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
+  return spawnFfmpeg([
+    '-f', 'concat', '-safe', '0', '-i', concatListPath,
+    '-c', 'copy', '-movflags', '+faststart', '-y', outPath,
+  ], outPath);
+}
+
+// ---------------------------------------------------------------------------
+// Concat — xfade + acrossfade (with transitions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Concatenate with xfade video transitions and acrossfade audio cross-fades.
+ * Re-encodes all inputs. Uses a chained filter_complex.
+ *
+ * xfade offset math:
+ *   offset_0 = duration[0] - T
+ *   offset_i = offset_{i-1} + duration[i] - T
+ *   (i.e. cumulative sum of (duration - T) for all clips before the current transition)
+ *
+ * This places each transition so it starts exactly T seconds before the end of
+ * the current clip, with no overlap gaps between transitions.
+ */
+async function concatWithTransitions(videoPaths, transition, transitionDuration, outputDir) {
+  const T = transitionDuration;
+  const n = videoPaths.length;
+
+  // Probe all durations (needed to compute xfade offsets)
+  const durations = await Promise.all(videoPaths.map(p => getAudioDuration(p)));
+
+  // Build chained xfade filters (video)
+  const videoFilters = [];
+  let prevV = '0:v';
+  let cumOffset = 0;
+  for (let i = 0; i < n - 1; i++) {
+    cumOffset += durations[i] - T;
+    const outV = i === n - 2 ? 'vout' : `vt${i}`;
+    videoFilters.push(
+      `[${prevV}][${i + 1}:v]xfade=transition=${transition}:duration=${T}:offset=${cumOffset.toFixed(4)}[${outV}]`
+    );
+    prevV = outV;
+  }
+
+  // Build chained acrossfade filters (audio)
+  const audioFilters = [];
+  let prevA = '0:a';
+  for (let i = 0; i < n - 1; i++) {
+    const outA = i === n - 2 ? 'aout' : `at${i}`;
+    audioFilters.push(
+      `[${prevA}][${i + 1}:a]acrossfade=d=${T}:c1=tri:c2=tri[${outA}]`
+    );
+    prevA = outA;
+  }
+
+  const filterComplex = [...videoFilters, ...audioFilters].join('; ');
+  const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
+
+  return spawnFfmpeg([
+    ...videoPaths.flatMap(p => ['-i', p]),
+    '-filter_complex', filterComplex,
+    '-map', '[vout]', '-map', '[aout]',
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+    '-y', outPath,
+  ], outPath);
+}
+
+// ---------------------------------------------------------------------------
+// Shared FFmpeg runner
+// ---------------------------------------------------------------------------
+
+function spawnFfmpeg(args, outPath) {
   return new Promise((resolve, reject) => {
-    const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
-
-    const args = [
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', concatListPath,
-      '-c', 'copy',
-      '-movflags', '+faststart',
-      '-y',
-      outPath,
-    ];
-
-    logger.debug({ cmd: `ffmpeg ${args.join(' ')}` }, 'FFmpeg concat started');
+    logger.debug({ cmd: `ffmpeg ${args.join(' ')}` }, 'FFmpeg started');
 
     const proc = spawn('ffmpeg', args);
     const stderrChunks = [];
@@ -180,11 +276,10 @@ function concatVideos(concatListPath, outputDir) {
     proc.on('close', code => {
       const stderr = Buffer.concat(stderrChunks).toString();
       if (code === 0) {
-        logger.debug({ outPath }, 'FFmpeg concat done');
+        logger.debug({ outPath }, 'FFmpeg done');
         resolve(outPath);
       } else {
-        logger.error({ code, stderr }, 'FFmpeg concat error');
-        // Surface the last meaningful FFmpeg error line
+        logger.error({ code, stderr }, 'FFmpeg error');
         const errLine = stderr.split('\n').filter(l => /error/i.test(l)).slice(-3).join(' | ');
         reject(new Error(`ffmpeg exited with code ${code}: ${errLine || stderr.slice(-300)}`));
       }
@@ -197,4 +292,4 @@ function concatVideos(concatListPath, outputDir) {
   });
 }
 
-module.exports = router;
+module.exports = { router, VALID_TRANSITIONS };

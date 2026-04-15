@@ -1,6 +1,7 @@
 'use strict';
 
 const { VALID_EFFECTS } = require('./services/composer');
+const { VALID_TRANSITIONS } = require('./routes/combine');
 
 /**
  * OpenAPI 3.0.3 specification for video-gen-api.
@@ -10,7 +11,7 @@ const spec = {
   openapi: '3.0.3',
   info: {
     title: 'video-gen-api',
-    version: '2.3.0',
+    version: '2.4.0',
     description:
       'Generates MP4 videos from an image or video clip, a text script, and TTS audio.\n\n' +
       '**Endpoints**\n\n' +
@@ -288,10 +289,12 @@ const spec = {
               schema: { $ref: '#/components/schemas/CombineRequest' },
               example: {
                 urls: [
-                  'https://minio.example.com/videos/generated/uuid-1.mp4?X-Amz-Signature=abc',
-                  'https://minio.example.com/videos/generated/uuid-2.mp4?X-Amz-Signature=def',
-                  'https://minio.example.com/videos/generated/uuid-3.mp4?X-Amz-Signature=ghi',
+                  'https://minio-api.shumov.eu/videos/generated/uuid-1.mp4',
+                  'https://minio-api.shumov.eu/videos/generated/uuid-2.mp4',
+                  'https://minio-api.shumov.eu/videos/generated/uuid-3.mp4',
                 ],
+                transition: 'fade',
+                transitionDuration: 0.5,
               },
             },
           },
@@ -303,12 +306,14 @@ const spec = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/CombineSuccess' },
                 example: {
-                  success:    true,
-                  url:        'https://minio.shumov.eu/videos/combined/550e8400-e29b-41d4-a716-446655440000.mp4',
-                  key:        'combined/550e8400-e29b-41d4-a716-446655440000.mp4',
-                  bucket:     'videos',
-                  duration:   27.84,
-                  videoCount: 3,
+                  success:            true,
+                  url:                'https://minio-api.shumov.eu/videos/combined/550e8400-e29b-41d4-a716-446655440000.mp4',
+                  key:                'combined/550e8400-e29b-41d4-a716-446655440000.mp4',
+                  bucket:             'videos',
+                  duration:           26.84,
+                  videoCount:         3,
+                  transition:         'fade',
+                  transitionDuration: 0.5,
                 },
               },
             },
@@ -319,11 +324,13 @@ const spec = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/Error' },
                 examples: {
-                  missingUrls:  { summary: 'No urls provided',    value: { error: 'Missing field: urls (must be a non-empty array)' } },
-                  tooFewUrls:   { summary: 'Only one URL given',  value: { error: 'At least 2 URLs are required to combine' } },
-                  tooManyUrls:  { summary: 'Over 20 URLs given',  value: { error: 'Too many URLs — maximum is 20' } },
-                  badUrl:       { summary: 'Invalid URL',         value: { error: 'urls[1] is not a valid URL' } },
-                  downloadFail: { summary: 'Download failed',     value: { error: 'Failed to download video (https://…): HTTP 403' } },
+                  missingUrls:     { summary: 'No urls provided',         value: { error: 'Missing field: urls (must be a non-empty array)' } },
+                  tooFewUrls:      { summary: 'Only one URL given',       value: { error: 'At least 2 URLs are required to combine' } },
+                  tooManyUrls:     { summary: 'Over 20 URLs given',       value: { error: 'Too many URLs — maximum is 20' } },
+                  badUrl:          { summary: 'Invalid URL',              value: { error: 'urls[1] is not a valid URL' } },
+                  badTransition:   { summary: 'Unknown transition',       value: { error: `Invalid transition "fly". Valid values: ${VALID_TRANSITIONS.join(', ')}` } },
+                  badTDuration:    { summary: 'transitionDuration out of range', value: { error: 'transitionDuration must be between 0 and 3 seconds' } },
+                  downloadFail:    { summary: 'Download failed',          value: { error: 'Failed to download video (https://…): HTTP 403' } },
                 },
               },
             },
@@ -387,11 +394,40 @@ const spec = {
             minItems: 2,
             maxItems: 20,
             items: { type: 'string', format: 'uri' },
-            description: 'Ordered list of MP4 URLs to concatenate (2–20). All videos must share the same codec and resolution.',
+            description: 'Ordered list of MP4 URLs to concatenate (2–20). Without a transition all inputs must share the same codec and resolution.',
             example: [
-              'https://minio.example.com/videos/generated/uuid-1.mp4?X-Amz-Signature=abc',
-              'https://minio.example.com/videos/generated/uuid-2.mp4?X-Amz-Signature=def',
+              'https://minio-api.shumov.eu/videos/generated/uuid-1.mp4',
+              'https://minio-api.shumov.eu/videos/generated/uuid-2.mp4',
             ],
+          },
+          transition: {
+            type: 'string',
+            enum: VALID_TRANSITIONS,
+            default: 'none',
+            description:
+              'xfade transition applied between every pair of clips.\n\n' +
+              '`none` (default) uses stream copy (fast, lossless). Any other value triggers a full ' +
+              're-encode with the selected xfade video transition and an acrossfade audio cross-fade.\n\n' +
+              '| Value | Motion |\n|---|---|\n' +
+              '| `none` | Cut (no transition) |\n' +
+              '| `fade` | Smooth opacity fade |\n' +
+              '| `fadeblack` | Fade through black |\n' +
+              '| `fadewhite` | Fade through white |\n' +
+              '| `dissolve` | Cross-dissolve |\n' +
+              '| `wipeleft/right/up/down` | Hard wipe in that direction |\n' +
+              '| `slideleft/right/up/down` | Outgoing clip slides out |\n' +
+              '| `circlecrop` | Circle crop reveal |\n' +
+              '| `circleopen/close` | Iris open / close |',
+            example: 'fade',
+          },
+          transitionDuration: {
+            type: 'number',
+            format: 'float',
+            default: 0.5,
+            minimum: 0,
+            maximum: 3,
+            description: 'Duration of each transition in seconds (0–3). Ignored when `transition` is `"none"`.',
+            example: 0.5,
           },
         },
       },
@@ -400,12 +436,14 @@ const spec = {
         type: 'object',
         required: ['success', 'url', 'key', 'bucket', 'duration', 'videoCount'],
         properties: {
-          success:    { type: 'boolean', example: true },
-          url:        { type: 'string', format: 'uri', description: 'Permanent public URL of the combined MP4 on MinIO.' },
-          key:        { type: 'string', example: 'combined/550e8400-e29b-41d4-a716-446655440000.mp4', description: 'Object key in the MinIO bucket.' },
-          bucket:     { type: 'string', example: 'videos', description: 'MinIO bucket name.' },
-          duration:   { type: 'number', format: 'float', description: 'Total combined video duration in seconds.', example: 27.84 },
-          videoCount: { type: 'integer', description: 'Number of input videos that were combined.', example: 3 },
+          success:            { type: 'boolean', example: true },
+          url:                { type: 'string', format: 'uri', description: 'Permanent public URL of the combined MP4 on MinIO.' },
+          key:                { type: 'string', example: 'combined/550e8400-e29b-41d4-a716-446655440000.mp4', description: 'Object key in the MinIO bucket.' },
+          bucket:             { type: 'string', example: 'videos', description: 'MinIO bucket name.' },
+          duration:           { type: 'number', format: 'float', description: 'Total combined video duration in seconds.', example: 26.84 },
+          videoCount:         { type: 'integer', description: 'Number of input videos that were combined.', example: 3 },
+          transition:         { type: 'string', description: 'Transition used (omitted when `none`).', example: 'fade' },
+          transitionDuration: { type: 'number', format: 'float', description: 'Transition duration in seconds (omitted when no transition).', example: 0.5 },
         },
       },
 

@@ -9,7 +9,7 @@ const config = require('./config');
 const logger = require('./logger');
 const generateRoute      = require('./routes/generate');
 const generateVideoRoute = require('./routes/generateVideo');
-const combineRoute       = require('./routes/combine');
+const { router: combineRoute } = require('./routes/combine');
 const healthRoute        = require('./routes/health');
 const docsRoute          = require('./routes/docs');
 
