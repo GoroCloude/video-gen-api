@@ -14,6 +14,13 @@ const router = Router();
  * and styles, so we override it for this route only — the API endpoints
  * themselves are still covered by the strict CSP applied in app.js.
  */
+// Prevent browsers and proxies from caching the docs UI or the raw spec
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  next();
+});
+
 router.use(
   helmet({
     contentSecurityPolicy: {
