@@ -208,13 +208,14 @@ function concatVideos(concatListPath, outputDir) {
  * Concatenate with xfade video transitions and acrossfade audio cross-fades.
  * Re-encodes all inputs. Uses a chained filter_complex.
  *
- * xfade offset math:
- *   offset_0 = duration[0] - T
- *   offset_i = offset_{i-1} + duration[i] - T
- *   (i.e. cumulative sum of (duration - T) for all clips before the current transition)
+ * Each input stream is normalised with setpts/asetpts=PTS-STARTPTS before
+ * entering the chain. Without this reset, xfade returns EINVAL (-22) because
+ * every downloaded MP4 has timestamps that start from 0 relative to itself;
+ * the filter cannot synchronise streams that all share the same origin.
  *
- * This places each transition so it starts exactly T seconds before the end of
- * the current clip, with no overlap gaps between transitions.
+ * xfade offset math (cumulative):
+ *   offset_i = Σ (duration[j] - T) for j = 0..i-1
+ * Places each transition T seconds before the end of the preceding clip.
  */
 async function concatWithTransitions(videoPaths, transition, transitionDuration, outputDir) {
   const T = transitionDuration;
@@ -223,36 +224,39 @@ async function concatWithTransitions(videoPaths, transition, transitionDuration,
   // Probe all durations (needed to compute xfade offsets)
   const durations = await Promise.all(videoPaths.map(p => getAudioDuration(p)));
 
-  // Build chained xfade filters (video)
-  const videoFilters = [];
-  let prevV = '0:v';
+  const filters = [];
+
+  // Normalise PTS on every input — required by xfade / acrossfade
+  for (let i = 0; i < n; i++) {
+    filters.push(`[${i}:v]setpts=PTS-STARTPTS[v${i}]`);
+    filters.push(`[${i}:a]asetpts=PTS-STARTPTS[a${i}]`);
+  }
+
+  // Chain xfade filters (video)
+  let prevV = 'v0';
   let cumOffset = 0;
   for (let i = 0; i < n - 1; i++) {
     cumOffset += durations[i] - T;
     const outV = i === n - 2 ? 'vout' : `vt${i}`;
-    videoFilters.push(
-      `[${prevV}][${i + 1}:v]xfade=transition=${transition}:duration=${T}:offset=${cumOffset.toFixed(4)}[${outV}]`
+    filters.push(
+      `[${prevV}][v${i + 1}]xfade=transition=${transition}:duration=${T}:offset=${cumOffset.toFixed(4)}[${outV}]`
     );
     prevV = outV;
   }
 
-  // Build chained acrossfade filters (audio)
-  const audioFilters = [];
-  let prevA = '0:a';
+  // Chain acrossfade filters (audio)
+  let prevA = 'a0';
   for (let i = 0; i < n - 1; i++) {
     const outA = i === n - 2 ? 'aout' : `at${i}`;
-    audioFilters.push(
-      `[${prevA}][${i + 1}:a]acrossfade=d=${T}:c1=tri:c2=tri[${outA}]`
-    );
+    filters.push(`[${prevA}][a${i + 1}]acrossfade=d=${T}[${outA}]`);
     prevA = outA;
   }
 
-  const filterComplex = [...videoFilters, ...audioFilters].join('; ');
   const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
 
   return spawnFfmpeg([
     ...videoPaths.flatMap(p => ['-i', p]),
-    '-filter_complex', filterComplex,
+    '-filter_complex', filters.join('; '),
     '-map', '[vout]', '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'aac', '-b:a', '192k',
