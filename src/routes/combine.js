@@ -11,6 +11,7 @@ const axios = require('axios');
 const { getAudioDuration } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 const logger = require('../logger');
+const config = require('../config');
 
 const router = Router();
 
@@ -18,6 +19,7 @@ const MAX_URLS = 20;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB per video
 const DEFAULT_TRANSITION_DURATION = 0.5;    // seconds
+const OUTPUT_FPS = 25;
 
 // xfade transitions exposed in the API.
 // Full list: https://ffmpeg.org/ffmpeg-filters.html#xfade
@@ -220,35 +222,60 @@ function concatVideos(concatListPath, outputDir) {
 async function concatWithTransitions(videoPaths, transition, transitionDuration, outputDir) {
   const T = transitionDuration;
   const n = videoPaths.length;
+  const W = config.video.width;
+  const H = config.video.height;
 
-  // Probe all durations (needed to compute xfade offsets)
+  // Probe all durations (needed to compute xfade/axfade offsets)
   const durations = await Promise.all(videoPaths.map(p => getAudioDuration(p)));
+
+  // Cumulative offsets: offset[i] = Σ (duration[j] - T) for j = 0..i
+  // Places each transition T seconds before the end of the preceding combined stream.
+  const offsets = [];
+  let cumOffset = 0;
+  for (let i = 0; i < n - 1; i++) {
+    cumOffset += durations[i] - T;
+    offsets.push(+cumOffset.toFixed(4));
+  }
 
   const filters = [];
 
-  // Normalise PTS on every input — required by xfade / acrossfade
+  // Normalise every input to a consistent resolution, frame rate, pixel format,
+  // and audio format. Without this, xfade returns EINVAL when inputs differ in
+  // any of these properties (e.g. combining clips from different sources).
   for (let i = 0; i < n; i++) {
-    filters.push(`[${i}:v]setpts=PTS-STARTPTS[v${i}]`);
-    filters.push(`[${i}:a]asetpts=PTS-STARTPTS[a${i}]`);
+    filters.push(
+      `[${i}:v]` +
+      `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
+      `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,` +
+      `fps=${OUTPUT_FPS},format=yuv420p,` +
+      `setpts=PTS-STARTPTS` +
+      `[v${i}]`
+    );
+    // aformat ensures consistent sample rate and layout before axfade
+    filters.push(
+      `[${i}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=PTS-STARTPTS[a${i}]`
+    );
   }
 
   // Chain xfade filters (video)
   let prevV = 'v0';
-  let cumOffset = 0;
   for (let i = 0; i < n - 1; i++) {
-    cumOffset += durations[i] - T;
     const outV = i === n - 2 ? 'vout' : `vt${i}`;
     filters.push(
-      `[${prevV}][v${i + 1}]xfade=transition=${transition}:duration=${T}:offset=${cumOffset.toFixed(4)}[${outV}]`
+      `[${prevV}][v${i + 1}]xfade=transition=${transition}:duration=${T}:offset=${offsets[i]}[${outV}]`
     );
     prevV = outV;
   }
 
-  // Chain acrossfade filters (audio)
+  // Chain axfade filters (audio) — same offset logic as xfade.
+  // acrossfade relies on EOF detection from the previous filter, which breaks
+  // when chained. axfade uses an explicit offset and chains reliably.
   let prevA = 'a0';
   for (let i = 0; i < n - 1; i++) {
     const outA = i === n - 2 ? 'aout' : `at${i}`;
-    filters.push(`[${prevA}][a${i + 1}]acrossfade=d=${T}[${outA}]`);
+    filters.push(
+      `[${prevA}][a${i + 1}]axfade=transition=fade:duration=${T}:offset=${offsets[i]}[${outA}]`
+    );
     prevA = outA;
   }
 
@@ -260,7 +287,7 @@ async function concatWithTransitions(videoPaths, transition, transitionDuration,
     '-map', '[vout]', '-map', '[aout]',
     '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
     '-c:a', 'aac', '-b:a', '192k',
-    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+    '-movflags', '+faststart',
     '-y', outPath,
   ], outPath);
 }
