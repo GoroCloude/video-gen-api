@@ -267,15 +267,14 @@ async function concatWithTransitions(videoPaths, transition, transitionDuration,
     prevV = outV;
   }
 
-  // Chain axfade filters (audio) — same offset logic as xfade.
-  // acrossfade relies on EOF detection from the previous filter, which breaks
-  // when chained. axfade uses an explicit offset and chains reliably.
+  // Chain acrossfade filters (audio).
+  // Inputs are normalised to the same sample rate/format above, so acrossfade
+  // chains correctly: it detects EOF on each filter output and starts the
+  // crossfade T seconds before that end.
   let prevA = 'a0';
   for (let i = 0; i < n - 1; i++) {
     const outA = i === n - 2 ? 'aout' : `at${i}`;
-    filters.push(
-      `[${prevA}][a${i + 1}]axfade=transition=fade:duration=${T}:offset=${offsets[i]}[${outA}]`
-    );
+    filters.push(`[${prevA}][a${i + 1}]acrossfade=d=${T}[${outA}]`);
     prevA = outA;
   }
 
