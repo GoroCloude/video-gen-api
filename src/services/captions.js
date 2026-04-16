@@ -79,7 +79,10 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   const dialogues = cues.map((cue, idx) => {
     const startSec = idx * cueDuration;
     const endSec   = Math.min((idx + 1) * cueDuration, audioDurationSeconds);
-    return `Dialogue: 0,${assTimestamp(startSec)},${assTimestamp(endSec)},Default,,0,0,0,,${cue}`;
+    // {\an N} is an ASS inline alignment override (numpad layout, 1-9).
+    // It is applied per-event and is always honoured by libass, making it more
+    // reliable than the Style Alignment field which some libass builds ignore.
+    return `Dialogue: 0,${assTimestamp(startSec)},${assTimestamp(endSec)},Default,,0,0,0,,{\\an${alignmentNumber}}${cue}`;
   });
 
   const outPath = path.join(outputDir, `${randomUUID()}.ass`);
