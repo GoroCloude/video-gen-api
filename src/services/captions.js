@@ -54,10 +54,12 @@ function generateSRT(text, audioDurationSeconds, outputDir) {
  * @param {number} audioDurationSeconds
  * @param {string} outputDir
  * @param {number} alignmentNumber  ASS numpad alignment (1–9)
+ * @param {number} [fontSizeOverride]  Per-request font size; falls back to CAPTION_FONT_SIZE env var
  * @returns {string} Absolute path to the saved .ass file
  */
-function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
-  const { fontSize, primaryColour, outlineColour, marginV, marginH } = config.captions;
+function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride) {
+  const { fontSize: defaultFontSize, primaryColour, outlineColour, marginV, marginH } = config.captions;
+  const fontSize = fontSizeOverride ?? defaultFontSize;
 
   const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
   const totalDurationCs = Math.round(audioDurationSeconds * 100);
@@ -95,10 +97,12 @@ function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentN
  * @param {number} audioDurationSeconds
  * @param {string} outputDir
  * @param {number} alignmentNumber  ASS numpad alignment (1–9)
+ * @param {number} [fontSizeOverride]  Per-request font size; falls back to CAPTION_FONT_SIZE env var
  * @returns {string} Absolute path to the saved .ass file
  */
-function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
-  const { fontSize, primaryColour, outlineColour, karaokeColour, marginV, marginH } = config.captions;
+function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride) {
+  const { fontSize: defaultFontSize, primaryColour, outlineColour, karaokeColour, marginV, marginH } = config.captions;
+  const fontSize = fontSizeOverride ?? defaultFontSize;
 
   const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
 

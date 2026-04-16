@@ -56,6 +56,15 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     return res.status(400).json({ error: e.message });
   }
 
+  // Optional per-request font size; falls back to CAPTION_FONT_SIZE env var
+  let fontSizeOverride = null;
+  if (req.body.fontSize !== undefined && req.body.fontSize !== '') {
+    fontSizeOverride = parseInt(req.body.fontSize, 10);
+    if (!Number.isInteger(fontSizeOverride) || fontSizeOverride < 1 || fontSizeOverride > 200) {
+      return res.status(400).json({ error: 'Invalid fontSize: must be an integer between 1 and 200' });
+    }
+  }
+
   const generatedFiles = [];
 
   try {
@@ -70,8 +79,8 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     log.info({ captionStyle: captionStyleRaw }, 'Step 3/4 — Generating captions');
     const alignmentNumber = resolveActiveAlignment(captionPositionRaw);
     const assPath = captionStyleRaw === 'word-by-word'
-      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber)
-      : generateASS(text, duration, tmpDir, alignmentNumber);
+      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride)
+      : generateASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride);
     generatedFiles.push(assPath);
 
     log.info('Step 4/4 — Composing video');
