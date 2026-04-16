@@ -54,8 +54,11 @@ const config = Object.freeze({
   captions: {
     fontSize: parseInt(optional('CAPTION_FONT_SIZE', '48'), 10),
     // Colours are in ASS hex format (&H00BBGGRR). Override via CAPTION_PRIMARY_COLOUR / CAPTION_OUTLINE_COLOUR.
-    primaryColour: optional('CAPTION_PRIMARY_COLOUR', '&H00FFFFFF'),  // white
-    outlineColour: optional('CAPTION_OUTLINE_COLOUR', '&H00000000'),  // black
+    primaryColour:  optional('CAPTION_PRIMARY_COLOUR',  '&H00FFFFFF'),  // white  — spoken/highlighted words
+    outlineColour:  optional('CAPTION_OUTLINE_COLOUR',  '&H00000000'),  // black  — text outline
+    // Karaoke fill colour: the dim colour shown for not-yet-spoken words.
+    // Progressively replaced by primaryColour as speech reaches each word.
+    karaokeColour:  optional('CAPTION_KARAOKE_COLOUR',  '&H00808080'),  // gray   — unspoken words
     // Position uses numpad layout: bottom-left=1, bottom-center=2, bottom-right=3,
     // middle-left=4, middle-center=5, middle-right=6, top-left=7, top-center=8, top-right=9
     position: optional('CAPTION_POSITION', 'bottom-center'),
