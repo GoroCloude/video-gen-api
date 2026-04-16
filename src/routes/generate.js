@@ -5,7 +5,7 @@ const fs = require('fs');
 const upload = require('../middleware/upload');
 const { generateTTS } = require('../services/tts');
 const { generateSRT } = require('../services/captions');
-const { composeVideo, getAudioDuration, validateEffect } = require('../services/composer');
+const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 
 const router = Router();
@@ -38,6 +38,14 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     }
   }
 
+  // Optional per-request caption position: top | center | bottom
+  const captionPositionRaw = (req.body.captionPosition || '').trim() || null;
+  if (captionPositionRaw) {
+    try { validateCaptionPosition(captionPositionRaw); } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+  }
+
   const generatedFiles = [];
 
   try {
@@ -54,7 +62,7 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     generatedFiles.push(srtPath);
 
     log.info('Step 4/4 — Composing video');
-    const videoPath = await composeVideo(req.file.path, audioPath, srtPath, tmpDir, duration, effectRaw);
+    const videoPath = await composeVideo(req.file.path, audioPath, srtPath, tmpDir, duration, effectRaw, captionPositionRaw);
     generatedFiles.push(videoPath);
 
     log.info('Uploading to storage');

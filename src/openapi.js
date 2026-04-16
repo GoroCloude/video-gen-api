@@ -1,6 +1,6 @@
 'use strict';
 
-const { VALID_EFFECTS } = require('./services/composer');
+const { VALID_EFFECTS, VALID_CAPTION_POSITIONS } = require('./services/composer');
 const { VALID_TRANSITIONS } = require('./routes/combine');
 
 /**
@@ -86,6 +86,18 @@ const spec = {
                       '| `shake` | Subtle handheld-camera shake |\n\n' +
                       'Omit to use the server-level `VIDEO_EFFECT` env var (default: `none`).',
                     example: 'ken-burns',
+                  },
+                  captionPosition: {
+                    type: 'string',
+                    enum: VALID_CAPTION_POSITIONS,
+                    description:
+                      'Vertical position of the burned-in captions.\n\n' +
+                      '| Value | Position |\n|---|---|\n' +
+                      '| `top` | Top-center |\n' +
+                      '| `center` | Middle-center |\n' +
+                      '| `bottom` | Bottom-center (default) |\n\n' +
+                      'Omit to use the server-level `CAPTION_POSITION` env var.',
+                    example: 'top',
                   },
                 },
               },

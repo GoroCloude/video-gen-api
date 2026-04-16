@@ -33,6 +33,23 @@ const POSITION_MAP = {
   'top-right':     9,
 };
 
+// Simple per-request values exposed in the API → full POSITION_MAP key
+const VALID_CAPTION_POSITIONS = ['top', 'center', 'bottom'];
+const CAPTION_POSITION_ALIAS = {
+  top:    'top-center',
+  center: 'middle-center',
+  bottom: 'bottom-center',
+};
+
+function validateCaptionPosition(pos) {
+  if (!VALID_CAPTION_POSITIONS.includes(pos)) {
+    throw new Error(
+      `Invalid captionPosition "${pos}". Valid values: ${VALID_CAPTION_POSITIONS.join(', ')}`
+    );
+  }
+  return pos;
+}
+
 function resolveAlignment(pos) {
   const alignment = POSITION_MAP[pos];
   if (!alignment) {
@@ -68,15 +85,16 @@ validateEffect(config.video.effect);
 
 /**
  * Compose the final MP4 from a still image, TTS audio, and SRT captions.
- * @param {string}  durationSeconds  Audio duration — used to pace motion effects.
- * @param {string}  [effectOverride] Per-request effect; falls back to VIDEO_EFFECT env var.
+ * @param {string}  durationSeconds        Audio duration — used to pace motion effects.
+ * @param {string}  [effectOverride]        Per-request effect; falls back to VIDEO_EFFECT env var.
+ * @param {string}  [captionPositionOverride] Per-request caption position (top|center|bottom).
  * @returns {Promise<string>} Absolute path to the output .mp4 file
  */
-function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds, effectOverride) {
+function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds, effectOverride, captionPositionOverride) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
     const activeEffect = effectOverride ?? config.video.effect;
-    const videoFilter = buildVideoFilter(srtPath, durationSeconds, activeEffect, true);
+    const videoFilter = buildVideoFilter(srtPath, durationSeconds, activeEffect, true, captionPositionOverride);
 
     const proc = ffmpeg()
       .input(imagePath)
@@ -116,7 +134,7 @@ function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds,
 // Filter chain builder
 // ---------------------------------------------------------------------------
 
-function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false) {
+function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false, captionPositionOverride = null) {
   const hasMotion = effect !== 'none';
 
   // Pre-scale: 1× for static, OVERSCAN× for motion (gives zoompan room to work)
@@ -128,13 +146,18 @@ function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false) {
     `scale=${scaledW}:${scaledH}:force_original_aspect_ratio=decrease,` +
     `pad=${scaledW}:${scaledH}:(ow-iw)/2:(oh-ih)/2:black`;
 
+  // Resolve caption position: per-request alias takes priority over env-var default
+  const activePosition = captionPositionOverride
+    ? CAPTION_POSITION_ALIAS[captionPositionOverride]
+    : position;
+
   const subtitleFilter =
     `subtitles=${escapePath(srtPath)}:force_style=` +
     `'FontSize=${fontSize},` +
     `PrimaryColour=${primaryColour},` +
     `OutlineColour=${outlineColour},` +
     `BorderStyle=1,Outline=2,` +
-    `Alignment=${resolveAlignment(position)},` +
+    `Alignment=${resolveAlignment(activePosition)},` +
     `MarginV=${marginV},` +
     `MarginH=${marginH}'`;
 
@@ -334,4 +357,4 @@ function escapePath(p) {
   return "'" + p.replace(/\\/g, '/').replace(/:/g, '\\:') + "'";
 }
 
-module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, VALID_EFFECTS };
+module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, VALID_EFFECTS, VALID_CAPTION_POSITIONS };
