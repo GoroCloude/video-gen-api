@@ -221,9 +221,36 @@ const spec = {
                     type: 'string',
                     minLength: 1,
                     description:
-                      'Voiceover script — spoken as TTS and burned in as captions.\n\n' +
-                      'Captions are split into 8-word cues distributed evenly over the audio duration.',
+                      'Voiceover script — spoken as TTS and burned in as captions.',
                     example: 'The historic city centre dates back over 800 years and draws millions of visitors each year.',
+                  },
+                  effect: {
+                    type: 'string',
+                    enum: VALID_EFFECTS,
+                    default: 'none',
+                    description:
+                      'Motion effect applied during encoding. Omit to use the server-level `VIDEO_EFFECT` env var.',
+                    example: 'none',
+                  },
+                  captionPosition: {
+                    type: 'string',
+                    enum: VALID_CAPTION_POSITIONS,
+                    description:
+                      'Vertical position of the burned-in captions: `top`, `center`, or `bottom` (default).\n\n' +
+                      'Omit to use the server-level `CAPTION_POSITION` env var.',
+                    example: 'bottom',
+                  },
+                  captionStyle: {
+                    type: 'string',
+                    enum: VALID_CAPTION_STYLES,
+                    default: 'word-by-word',
+                    description:
+                      'Caption rendering style.\n\n' +
+                      '| Value | Effect |\n|---|---|\n' +
+                      '| `word-by-word` | One word on screen at a time (default) |\n' +
+                      '| `karaoke` | 8-word chunks; words fill from dim to bright as audio progresses |\n\n' +
+                      'Omit to use the server-level `CAPTION_STYLE` env var.',
+                    example: 'word-by-word',
                   },
                 },
               },
@@ -254,6 +281,7 @@ const spec = {
                 examples: {
                   missingVideo: { summary: 'No video uploaded', value: { error: 'Missing field: video' } },
                   missingText:  { summary: 'No text provided',  value: { error: 'Missing field: text'  } },
+                  badEffect:    { summary: 'Unknown effect',     value: { error: `Invalid effect "fly". Valid values: ${VALID_EFFECTS.join(', ')}` } },
                 },
               },
             },

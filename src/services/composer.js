@@ -274,24 +274,23 @@ function buildMotionFilter(totalFrames, effect) {
 }
 
 /**
- * Compose the final MP4 from an input video, TTS audio, and SRT captions.
- * Unlike composeVideo, the input is a real video (not a still image) so:
- *   - no -loop 1
- *   - no motion effects (the video already moves)
- *   - video is scaled/padded to the configured output dimensions
- *   - -shortest stops the output when the shorter of TTS audio or input video ends
+ * Compose the final MP4 from an input video, TTS audio, and ASS/SRT captions.
+ * Unlike composeVideo, the input is a real video (not a still image) so there
+ * is no -loop 1. Accepts the same subtitle/effect parameters as composeVideo.
  *
  * @param {string} videoPath     Path to the source video file
  * @param {string} audioPath     Path to the TTS .mp3 file
- * @param {string} srtPath       Path to the .srt captions file
+ * @param {string} subtitlePath  Path to the .ass or .srt captions file
  * @param {string} outputDir     Temp dir for the output file
- * @param {number} durationSeconds TTS audio duration (used only to size caption timing — not clamping)
+ * @param {number} durationSeconds TTS audio duration (used to size motion effect)
+ * @param {string} [effectOverride] Per-request effect; falls back to VIDEO_EFFECT env var
  * @returns {Promise<string>} Absolute path to the output .mp4 file
  */
-function overlayVideoWithTTS(videoPath, audioPath, srtPath, outputDir, durationSeconds) {
+function overlayVideoWithTTS(videoPath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
-    const videoFilter = buildVideoFilter(srtPath, durationSeconds, 'none');
+    const activeEffect = effectOverride ?? config.video.effect;
+    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect);
 
     const proc = ffmpeg()
       .input(videoPath)
