@@ -52,7 +52,7 @@ const config = Object.freeze({
   },
 
   captions: {
-    fontSize: parseInt(optional('CAPTION_FONT_SIZE', '48'), 10),
+    fontSize: parseInt(optional('CAPTION_FONT_SIZE', '7'), 10),
     // Colours are in ASS hex format (&H00BBGGRR). Override via CAPTION_PRIMARY_COLOUR / CAPTION_OUTLINE_COLOUR.
     primaryColour:  optional('CAPTION_PRIMARY_COLOUR',  '&H00FFFFFF'),  // white  — spoken/highlighted words
     outlineColour:  optional('CAPTION_OUTLINE_COLOUR',  '&H00000000'),  // black  — text outline
