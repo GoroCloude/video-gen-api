@@ -47,7 +47,6 @@ function generateSRT(text, audioDurationSeconds, outputDir) {
  */
 function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   const { fontSize, primaryColour, outlineColour, marginV, marginH } = config.captions;
-  const { width, height } = config.video;
 
   const words = text.trim().split(/\s+/);
   const cues = [];
@@ -60,8 +59,12 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   const header = [
     '[Script Info]',
     'ScriptType: v4.00+',
-    `PlayResX: ${width}`,
-    `PlayResY: ${height}`,
+    // Use the same PlayRes as FFmpeg's internal ASS default (used by force_style).
+    // ASS scales font sizes and margins by videoHeight/PlayResY, so these values
+    // must match what force_style used (384x288) to keep CAPTION_FONT_SIZE and
+    // CAPTION_MARGIN_V config values visually identical to the old SRT+force_style path.
+    'PlayResX: 384',
+    'PlayResY: 288',
     'ScaledBorderAndShadow: yes',
     '',
     '[V4+ Styles]',
