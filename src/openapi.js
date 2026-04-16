@@ -2,6 +2,7 @@
 
 const { VALID_EFFECTS, VALID_CAPTION_POSITIONS } = require('./services/composer');
 const { VALID_TRANSITIONS } = require('./routes/combine');
+const { VALID_CAPTION_STYLES } = require('./services/captions');
 
 /**
  * OpenAPI 3.0.3 specification for video-gen-api.
@@ -98,6 +99,18 @@ const spec = {
                       '| `bottom` | Bottom-center (default) |\n\n' +
                       'Omit to use the server-level `CAPTION_POSITION` env var.',
                     example: 'top',
+                  },
+                  captionStyle: {
+                    type: 'string',
+                    enum: VALID_CAPTION_STYLES,
+                    default: 'word-by-word',
+                    description:
+                      'Caption rendering style.\n\n' +
+                      '| Value | Effect |\n|---|---|\n' +
+                      '| `word-by-word` | One word on screen at a time — TikTok/Reels style (default) |\n' +
+                      '| `karaoke` | 8-word chunks visible simultaneously; each word fills from dim to bright as audio progresses |\n\n' +
+                      'Omit to use the server-level `CAPTION_STYLE` env var (default: `word-by-word`).',
+                    example: 'word-by-word',
                   },
                 },
               },

@@ -4,19 +4,23 @@ const { Router } = require('express');
 const fs = require('fs');
 const upload = require('../middleware/upload');
 const { generateTTS } = require('../services/tts');
-const { generateASS } = require('../services/captions');
+const { generateASS, generateWordByWordASS, VALID_CAPTION_STYLES, validateCaptionStyle } = require('../services/captions');
 const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
+const config = require('../config');
 
 const router = Router();
 
 /**
  * POST /generate
  * Multipart form fields:
- *   image  — image file (JPEG/PNG, max configurable MB)
- *   text   — script for TTS and burned-in captions
+ *   image          — image file (JPEG/PNG, max configurable MB)
+ *   text           — script for TTS and burned-in captions
+ *   effect         — optional motion effect (overrides VIDEO_EFFECT env)
+ *   captionPosition — optional position: top | center | bottom
+ *   captionStyle   — optional style: word-by-word | karaoke
  *
- * Response: { success, url, key, bucket, duration, expiresIn }
+ * Response: { success, url, key, bucket, duration }
  */
 router.post('/', upload.single('image'), async (req, res, next) => {
   const log = req.log;
@@ -46,6 +50,12 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     }
   }
 
+  // Optional per-request caption style; falls back to CAPTION_STYLE env var
+  const captionStyleRaw = (req.body.captionStyle || '').trim() || config.captions.style;
+  try { validateCaptionStyle(captionStyleRaw); } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
   const generatedFiles = [];
 
   try {
@@ -57,9 +67,11 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     const duration = await getAudioDuration(audioPath);
     log.info({ duration: +duration.toFixed(2) }, 'Audio duration measured');
 
-    log.info('Step 3/4 — Generating captions');
+    log.info({ captionStyle: captionStyleRaw }, 'Step 3/4 — Generating captions');
     const alignmentNumber = resolveActiveAlignment(captionPositionRaw);
-    const assPath = generateASS(text, duration, tmpDir, alignmentNumber);
+    const assPath = captionStyleRaw === 'word-by-word'
+      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber)
+      : generateASS(text, duration, tmpDir, alignmentNumber);
     generatedFiles.push(assPath);
 
     log.info('Step 4/4 — Composing video');

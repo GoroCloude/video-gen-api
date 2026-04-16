@@ -8,6 +8,17 @@ const logger = require('../logger');
 
 const WORDS_PER_CUE = 8;
 
+const VALID_CAPTION_STYLES = ['word-by-word', 'karaoke'];
+
+function validateCaptionStyle(style) {
+  if (!VALID_CAPTION_STYLES.includes(style)) {
+    throw new Error(
+      `Invalid captionStyle "${style}". Valid values: ${VALID_CAPTION_STYLES.join(', ')}`
+    );
+  }
+  return style;
+}
+
 /**
  * Build an SRT subtitle file from text and a known audio duration.
  * Splits text into chunks of WORDS_PER_CUE words distributed evenly over the duration.
@@ -35,6 +46,41 @@ function generateSRT(text, audioDurationSeconds, outputDir) {
 }
 
 /**
+ * Generate an ASS subtitle file where each word appears alone for its share
+ * of the audio duration. Only the current word is on screen at any time —
+ * the "word-by-word" or TikTok-style caption effect.
+ *
+ * @param {string} text
+ * @param {number} audioDurationSeconds
+ * @param {string} outputDir
+ * @param {number} alignmentNumber  ASS numpad alignment (1–9)
+ * @returns {string} Absolute path to the saved .ass file
+ */
+function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
+  const { fontSize, primaryColour, outlineColour, marginV, marginH } = config.captions;
+
+  const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
+  const totalDurationCs = Math.round(audioDurationSeconds * 100);
+  const perWordDurationRaw = totalDurationCs / words.length;
+
+  const header = buildASSHeader(fontSize, primaryColour, '&HFF000000', outlineColour, alignmentNumber, marginH, marginV);
+
+  const dialogues = words.map((word, idx) => {
+    const startCs = Math.round(idx * perWordDurationRaw);
+    const endCs   = idx === words.length - 1
+      ? totalDurationCs
+      : Math.round((idx + 1) * perWordDurationRaw);
+    // {\an N} inline alignment override — always honoured by libass.
+    return `Dialogue: 0,${assTimestampFromCs(startCs)},${assTimestampFromCs(endCs)},Default,,0,0,0,,{\\an${alignmentNumber}}${word}`;
+  });
+
+  const outPath = path.join(outputDir, `${randomUUID()}.ass`);
+  fs.writeFileSync(outPath, [header, ...dialogues].join('\n'), 'utf8');
+  logger.debug({ words: words.length, alignmentNumber, outPath }, 'ASS word-by-word generated');
+  return outPath;
+}
+
+/**
  * Build an ASS subtitle file with a progressive karaoke highlight effect.
  *
  * Words are grouped into WORDS_PER_CUE-word chunks. Within each chunk all
@@ -54,9 +100,7 @@ function generateSRT(text, audioDurationSeconds, outputDir) {
 function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   const { fontSize, primaryColour, outlineColour, karaokeColour, marginV, marginH } = config.captions;
 
-  // Strip ASS control characters from user text before embedding in subtitle file.
-  const safeText = sanitizeAssText(text);
-  const words = safeText.trim().split(/\s+/).filter(Boolean);
+  const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
 
   const cues = [];
   for (let i = 0; i < words.length; i += WORDS_PER_CUE) {
@@ -68,26 +112,8 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   // so timestamps and \kf durations stay on the same centisecond grid.
   const chunkDurationRaw = totalDurationCs / cues.length;
 
-  const header = [
-    '[Script Info]',
-    'ScriptType: v4.00+',
-    // Use the same PlayRes as FFmpeg's internal ASS default (used by force_style).
-    // ASS scales font sizes and margins by videoHeight/PlayResY, so these values
-    // must match what force_style used (384x288) to keep CAPTION_FONT_SIZE and
-    // CAPTION_MARGIN_V config values visually identical to the old SRT+force_style path.
-    'PlayResX: 384',
-    'PlayResY: 288',
-    'ScaledBorderAndShadow: yes',
-    '',
-    '[V4+ Styles]',
-    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    // SecondaryColour = dim/unspoken word colour (used by \kf karaoke fill).
-    // BackColour &HFF000000 = fully transparent background; BorderStyle=1 = outline only.
-    `Style: Default,Arial,${fontSize},${primaryColour},${karaokeColour},${outlineColour},&HFF000000,0,0,0,0,100,100,0,0,1,2,0,${alignmentNumber},${marginH},${marginH},${marginV},1`,
-    '',
-    '[Events]',
-    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
-  ].join('\n');
+  // SecondaryColour = dim/unspoken word colour (used by \kf karaoke fill).
+  const header = buildASSHeader(fontSize, primaryColour, karaokeColour, outlineColour, alignmentNumber, marginH, marginV);
 
   const dialogues = cues.map((chunkWords, idx) => {
     // Work in integer centiseconds to avoid floating-point drift between
@@ -126,6 +152,35 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber) {
   return outPath;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the ASS file header (Script Info + V4+ Styles + Events header row).
+ *
+ * PlayResX/Y match FFmpeg's internal ASS defaults (384×288) so that
+ * CAPTION_FONT_SIZE and CAPTION_MARGIN_V config values scale correctly.
+ * ASS scales all sizes by videoHeight/PlayResY at render time.
+ */
+function buildASSHeader(fontSize, primaryColour, secondaryColour, outlineColour, alignmentNumber, marginH, marginV) {
+  return [
+    '[Script Info]',
+    'ScriptType: v4.00+',
+    'PlayResX: 384',
+    'PlayResY: 288',
+    'ScaledBorderAndShadow: yes',
+    '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+    // BackColour &HFF000000 = fully transparent background; BorderStyle=1 = outline only.
+    `Style: Default,Arial,${fontSize},${primaryColour},${secondaryColour},${outlineColour},&HFF000000,0,0,0,0,100,100,0,0,1,2,0,${alignmentNumber},${marginH},${marginH},${marginV},1`,
+    '',
+    '[Events]',
+    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+  ].join('\n');
+}
+
 /** Strip ASS override-block characters that would break the subtitle parser */
 function sanitizeAssText(text) {
   return text.replace(/[{}\\]/g, '');
@@ -153,4 +208,4 @@ function pad(n, width = 2) {
   return String(n).padStart(width, '0');
 }
 
-module.exports = { generateSRT, generateASS };
+module.exports = { generateSRT, generateASS, generateWordByWordASS, VALID_CAPTION_STYLES, validateCaptionStyle };
