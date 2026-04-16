@@ -4,8 +4,8 @@ const { Router } = require('express');
 const fs = require('fs');
 const upload = require('../middleware/upload');
 const { generateTTS } = require('../services/tts');
-const { generateSRT } = require('../services/captions');
-const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition } = require('../services/composer');
+const { generateASS } = require('../services/captions');
+const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 
 const router = Router();
@@ -58,11 +58,12 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     log.info({ duration: +duration.toFixed(2) }, 'Audio duration measured');
 
     log.info('Step 3/4 — Generating captions');
-    const srtPath = generateSRT(text, duration, tmpDir);
-    generatedFiles.push(srtPath);
+    const alignmentNumber = resolveActiveAlignment(captionPositionRaw);
+    const assPath = generateASS(text, duration, tmpDir, alignmentNumber);
+    generatedFiles.push(assPath);
 
     log.info('Step 4/4 — Composing video');
-    const videoPath = await composeVideo(req.file.path, audioPath, srtPath, tmpDir, duration, effectRaw, captionPositionRaw);
+    const videoPath = await composeVideo(req.file.path, audioPath, assPath, tmpDir, duration, effectRaw);
     generatedFiles.push(videoPath);
 
     log.info('Uploading to storage');

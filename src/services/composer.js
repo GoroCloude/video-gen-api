@@ -79,22 +79,35 @@ function validateEffect(e) {
 // Validate the configured default at startup — fail fast if the env var is wrong.
 validateEffect(config.video.effect);
 
+/**
+ * Resolve the active ASS alignment number for caption positioning.
+ * Per-request alias (top|center|bottom) overrides the env-var default.
+ * @param {string|null} captionPositionOverride
+ * @returns {number} ASS numpad alignment (1–9)
+ */
+function resolveActiveAlignment(captionPositionOverride) {
+  const pos = captionPositionOverride
+    ? CAPTION_POSITION_ALIAS[captionPositionOverride]
+    : position;
+  return resolveAlignment(pos);
+}
+
 // ---------------------------------------------------------------------------
 // Video composition
 // ---------------------------------------------------------------------------
 
 /**
- * Compose the final MP4 from a still image, TTS audio, and SRT captions.
- * @param {string}  durationSeconds        Audio duration — used to pace motion effects.
- * @param {string}  [effectOverride]        Per-request effect; falls back to VIDEO_EFFECT env var.
- * @param {string}  [captionPositionOverride] Per-request caption position (top|center|bottom).
+ * Compose the final MP4 from a still image, TTS audio, and ASS captions.
+ * @param {string}  subtitlePath   Path to the .ass subtitle file (alignment baked in).
+ * @param {number}  durationSeconds  Audio duration — used to pace motion effects.
+ * @param {string}  [effectOverride] Per-request effect; falls back to VIDEO_EFFECT env var.
  * @returns {Promise<string>} Absolute path to the output .mp4 file
  */
-function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds, effectOverride, captionPositionOverride) {
+function composeVideo(imagePath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
     const activeEffect = effectOverride ?? config.video.effect;
-    const videoFilter = buildVideoFilter(srtPath, durationSeconds, activeEffect, true, captionPositionOverride);
+    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect, true);
 
     const proc = ffmpeg()
       .input(imagePath)
@@ -134,7 +147,7 @@ function composeVideo(imagePath, audioPath, srtPath, outputDir, durationSeconds,
 // Filter chain builder
 // ---------------------------------------------------------------------------
 
-function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false, captionPositionOverride = null) {
+function buildVideoFilter(subtitlePath, durationSeconds, effect, fadeIn = false) {
   const hasMotion = effect !== 'none';
 
   // Pre-scale: 1× for static, OVERSCAN× for motion (gives zoompan room to work)
@@ -146,20 +159,19 @@ function buildVideoFilter(srtPath, durationSeconds, effect, fadeIn = false, capt
     `scale=${scaledW}:${scaledH}:force_original_aspect_ratio=decrease,` +
     `pad=${scaledW}:${scaledH}:(ow-iw)/2:(oh-ih)/2:black`;
 
-  // Resolve caption position: per-request alias takes priority over env-var default
-  const activePosition = captionPositionOverride
-    ? CAPTION_POSITION_ALIAS[captionPositionOverride]
-    : position;
-
-  const subtitleFilter =
-    `subtitles=${escapePath(srtPath)}:force_style=` +
-    `'FontSize=${fontSize},` +
-    `PrimaryColour=${primaryColour},` +
-    `OutlineColour=${outlineColour},` +
-    `BorderStyle=1,Outline=2,` +
-    `Alignment=${resolveAlignment(activePosition)},` +
-    `MarginV=${marginV},` +
-    `MarginH=${marginH}'`;
+  // ASS files carry all style info (including alignment) baked in — no force_style needed.
+  // SRT files (used by /generate-video) rely on force_style for font/color/position.
+  const isAss = path.extname(subtitlePath).toLowerCase() === '.ass';
+  const subtitleFilter = isAss
+    ? `subtitles=${escapePath(subtitlePath)}`
+    : `subtitles=${escapePath(subtitlePath)}:force_style=` +
+      `'FontSize=${fontSize},` +
+      `PrimaryColour=${primaryColour},` +
+      `OutlineColour=${outlineColour},` +
+      `BorderStyle=1,Outline=2,` +
+      `Alignment=${resolveAlignment(position)},` +
+      `MarginV=${marginV},` +
+      `MarginH=${marginH}'`;
 
   // Fade placed after subtitles so captions and video fade in together
   const fadeFilter = fadeIn ? `,fade=type=in:start_time=0:duration=${FADE_IN_DURATION}` : '';
@@ -357,4 +369,4 @@ function escapePath(p) {
   return "'" + p.replace(/\\/g, '/').replace(/:/g, '\\:') + "'";
 }
 
-module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, VALID_EFFECTS, VALID_CAPTION_POSITIONS };
+module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment, VALID_EFFECTS, VALID_CAPTION_POSITIONS };
