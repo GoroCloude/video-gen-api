@@ -112,6 +112,16 @@ const spec = {
                       'Omit to use the server-level `CAPTION_STYLE` env var (default: `word-by-word`).',
                     example: 'word-by-word',
                   },
+                  fontSize: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 200,
+                    description:
+                      'Caption font size (ASS units, scaled by video height / 288).\n\n' +
+                      'On a 1920 px tall video, size 7 ≈ 47 px. ' +
+                      'Omit to use the server-level `CAPTION_FONT_SIZE` env var (default: 7).',
+                    example: 7,
+                  },
                 },
               },
             },
@@ -251,6 +261,16 @@ const spec = {
                       '| `karaoke` | 8-word chunks; words fill from dim to bright as audio progresses |\n\n' +
                       'Omit to use the server-level `CAPTION_STYLE` env var.',
                     example: 'word-by-word',
+                  },
+                  fontSize: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 200,
+                    description:
+                      'Caption font size (ASS units, scaled by video height / 288).\n\n' +
+                      'On a 1920 px tall video, size 7 ≈ 47 px. ' +
+                      'Omit to use the server-level `CAPTION_FONT_SIZE` env var (default: 7).',
+                    example: 7,
                   },
                 },
               },

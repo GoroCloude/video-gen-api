@@ -23,8 +23,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate"
+              ]
             },
             "header": [],
             "body": {
@@ -41,6 +45,13 @@
                   "value": "Welcome to Munich. This city has over 1.5 million residents and world-class beer gardens.",
                   "type": "text",
                   "description": "Script — spoken as TTS and burned in as captions."
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -51,7 +62,12 @@
               "name": "200 — Success",
               "status": "OK",
               "code": 200,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"success\": true,\n  \"url\": \"https://minio-api.shumov.eu/videos/generated/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"key\": \"generated/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"bucket\": \"videos\",\n  \"duration\": 8.42\n}",
               "_postman_previewlanguage": "json"
             },
@@ -59,7 +75,12 @@
               "name": "400 — Missing image",
               "status": "Bad Request",
               "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"Missing field: image\"\n}",
               "_postman_previewlanguage": "json"
             },
@@ -67,7 +88,12 @@
               "name": "400 — Missing text",
               "status": "Bad Request",
               "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"Missing field: text\"\n}",
               "_postman_previewlanguage": "json"
             },
@@ -75,7 +101,12 @@
               "name": "413 — Image too large",
               "status": "Payload Too Large",
               "code": 413,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"Image too large (max 20 MB)\"\n}",
               "_postman_previewlanguage": "json"
             },
@@ -83,7 +114,12 @@
               "name": "415 — Wrong file type",
               "status": "Unsupported Media Type",
               "code": 415,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"Only image files are accepted\"\n}",
               "_postman_previewlanguage": "json"
             },
@@ -91,8 +127,13 @@
               "name": "429 — Rate limited",
               "status": "Too Many Requests",
               "code": 429,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"error\": \"Too many requests \u2014 please try again later\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Too many requests — please try again later\"\n}",
               "_postman_previewlanguage": "json"
             }
           ]
@@ -103,8 +144,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate"
+              ]
             },
             "header": [],
             "body": {
@@ -138,6 +183,13 @@
                   "value": "word-by-word",
                   "type": "text",
                   "description": "Caption style: word-by-word | karaoke"
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -151,8 +203,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate"
+              ]
             },
             "header": [],
             "body": {
@@ -184,6 +240,13 @@
                   "value": "karaoke",
                   "type": "text",
                   "description": "8-word chunks visible at once; each word fills from gray to white as audio reaches it."
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -197,8 +260,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate"
+              ]
             },
             "header": [],
             "body": {
@@ -233,6 +300,13 @@
                   "type": "text",
                   "disabled": true,
                   "description": "Toggle between: word-by-word | karaoke"
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -251,8 +325,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate-video",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate-video"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate-video"
+              ]
             },
             "header": [],
             "body": {
@@ -269,6 +347,13 @@
                   "value": "The historic city centre dates back over 800 years and draws millions of visitors each year.",
                   "type": "text",
                   "description": "Script — spoken as TTS and burned in as captions."
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -279,7 +364,12 @@
               "name": "200 — Success",
               "status": "OK",
               "code": 200,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"success\": true,\n  \"url\": \"https://minio-api.shumov.eu/videos/generated/550e8400-e29b-41d4-a716-446655440001.mp4\",\n  \"key\": \"generated/550e8400-e29b-41d4-a716-446655440001.mp4\",\n  \"bucket\": \"videos\",\n  \"duration\": 12.15\n}",
               "_postman_previewlanguage": "json"
             },
@@ -287,7 +377,12 @@
               "name": "400 — Missing video",
               "status": "Bad Request",
               "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"Missing field: video\"\n}",
               "_postman_previewlanguage": "json"
             }
@@ -299,8 +394,12 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/generate-video",
-              "host": ["{{baseUrl}}"],
-              "path": ["generate-video"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "generate-video"
+              ]
             },
             "header": [],
             "body": {
@@ -334,6 +433,13 @@
                   "value": "word-by-word",
                   "type": "text",
                   "description": "Caption style: word-by-word | karaoke"
+                },
+                {
+                  "key": "fontSize",
+                  "value": "7",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Caption font size (ASS units). On 1920px video: size 7  47px. Overrides CAPTION_FONT_SIZE env var."
                 }
               ]
             },
@@ -352,16 +458,27 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/combine",
-              "host": ["{{baseUrl}}"],
-              "path": ["combine"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "combine"
+              ]
             },
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"urls\": [\n    \"https://minio-api.shumov.eu/videos/generated/uuid-1.mp4\",\n    \"https://minio-api.shumov.eu/videos/generated/uuid-2.mp4\"\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "description": "Concatenates 2+ MP4 videos into one. Replace URLs with real URLs from /generate responses."
           },
@@ -370,7 +487,12 @@
               "name": "200 — Success",
               "status": "OK",
               "code": 200,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"success\": true,\n  \"url\": \"https://minio-api.shumov.eu/videos/combined/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"key\": \"combined/550e8400-e29b-41d4-a716-446655440000.mp4\",\n  \"bucket\": \"videos\",\n  \"videoCount\": 2\n}",
               "_postman_previewlanguage": "json"
             },
@@ -378,7 +500,12 @@
               "name": "400 — Too few URLs",
               "status": "Bad Request",
               "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"error\": \"At least 2 URLs are required to combine\"\n}",
               "_postman_previewlanguage": "json"
             }
@@ -390,16 +517,27 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/combine",
-              "host": ["{{baseUrl}}"],
-              "path": ["combine"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "combine"
+              ]
             },
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"urls\": [\n    \"https://minio-api.shumov.eu/videos/generated/uuid-1.mp4\",\n    \"https://minio-api.shumov.eu/videos/generated/uuid-2.mp4\",\n    \"https://minio-api.shumov.eu/videos/generated/uuid-3.mp4\"\n  ],\n  \"transition\": \"fade\",\n  \"transitionDuration\": 0.5\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "description": "Concatenates 3 videos with a 0.5 s fade transition between each clip."
           },
@@ -413,8 +551,12 @@
         "method": "GET",
         "url": {
           "raw": "{{baseUrl}}/health",
-          "host": ["{{baseUrl}}"],
-          "path": ["health"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
         },
         "header": [],
         "description": "Returns active TTS provider chain and video output dimensions. Safe to call frequently."
@@ -424,7 +566,12 @@
           "name": "200 — OK",
           "status": "OK",
           "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
           "body": "{\n  \"status\": \"ok\",\n  \"tts\": \"elevenlabs+google-fallback\",\n  \"video\": \"1080x1920\"\n}",
           "_postman_previewlanguage": "json"
         }
@@ -436,8 +583,13 @@
         "method": "GET",
         "url": {
           "raw": "{{baseUrl}}/api-docs/json",
-          "host": ["{{baseUrl}}"],
-          "path": ["api-docs", "json"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api-docs",
+            "json"
+          ]
         },
         "header": [],
         "description": "Returns the raw OpenAPI 3.0.3 spec. Import into Postman: Import → Link → {{baseUrl}}/api-docs/json"
