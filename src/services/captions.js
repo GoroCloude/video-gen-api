@@ -57,15 +57,16 @@ function generateSRT(text, audioDurationSeconds, outputDir) {
  * @param {number} [fontSizeOverride]  Per-request font size; falls back to CAPTION_FONT_SIZE env var
  * @returns {string} Absolute path to the saved .ass file
  */
-function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride) {
-  const { fontSize: defaultFontSize, primaryColour, outlineColour, marginV, marginH } = config.captions;
+function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride, fontNameOverride) {
+  const { fontSize: defaultFontSize, primaryColour, outlineColour, marginV, marginH, fontName: defaultFontName } = config.captions;
   const fontSize = fontSizeOverride ?? defaultFontSize;
+  const fontName = fontNameOverride ?? defaultFontName;
 
   const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
   const totalDurationCs = Math.round(audioDurationSeconds * 100);
   const perWordDurationRaw = totalDurationCs / words.length;
 
-  const header = buildASSHeader(fontSize, primaryColour, '&HFF000000', outlineColour, alignmentNumber, marginH, marginV);
+  const header = buildASSHeader(fontName, fontSize, primaryColour, '&HFF000000', outlineColour, alignmentNumber, marginH, marginV);
 
   const dialogues = words.map((word, idx) => {
     const startCs = Math.round(idx * perWordDurationRaw);
@@ -100,9 +101,10 @@ function generateWordByWordASS(text, audioDurationSeconds, outputDir, alignmentN
  * @param {number} [fontSizeOverride]  Per-request font size; falls back to CAPTION_FONT_SIZE env var
  * @returns {string} Absolute path to the saved .ass file
  */
-function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride) {
-  const { fontSize: defaultFontSize, primaryColour, outlineColour, karaokeColour, marginV, marginH } = config.captions;
+function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber, fontSizeOverride, fontNameOverride) {
+  const { fontSize: defaultFontSize, primaryColour, outlineColour, karaokeColour, marginV, marginH, fontName: defaultFontName } = config.captions;
   const fontSize = fontSizeOverride ?? defaultFontSize;
+  const fontName = fontNameOverride ?? defaultFontName;
 
   const words = sanitizeAssText(text).trim().split(/\s+/).filter(Boolean);
 
@@ -117,7 +119,7 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber, fon
   const chunkDurationRaw = totalDurationCs / cues.length;
 
   // SecondaryColour = dim/unspoken word colour (used by \kf karaoke fill).
-  const header = buildASSHeader(fontSize, primaryColour, karaokeColour, outlineColour, alignmentNumber, marginH, marginV);
+  const header = buildASSHeader(fontName, fontSize, primaryColour, karaokeColour, outlineColour, alignmentNumber, marginH, marginV);
 
   const dialogues = cues.map((chunkWords, idx) => {
     // Work in integer centiseconds to avoid floating-point drift between
@@ -167,7 +169,7 @@ function generateASS(text, audioDurationSeconds, outputDir, alignmentNumber, fon
  * CAPTION_FONT_SIZE and CAPTION_MARGIN_V config values scale correctly.
  * ASS scales all sizes by videoHeight/PlayResY at render time.
  */
-function buildASSHeader(fontSize, primaryColour, secondaryColour, outlineColour, alignmentNumber, marginH, marginV) {
+function buildASSHeader(fontName, fontSize, primaryColour, secondaryColour, outlineColour, alignmentNumber, marginH, marginV) {
   return [
     '[Script Info]',
     'ScriptType: v4.00+',
@@ -178,7 +180,7 @@ function buildASSHeader(fontSize, primaryColour, secondaryColour, outlineColour,
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     // BackColour &HFF000000 = fully transparent background; BorderStyle=1 = outline only.
-    `Style: Default,Arial,${fontSize},${primaryColour},${secondaryColour},${outlineColour},&HFF000000,0,0,0,0,100,100,0,0,1,2,0,${alignmentNumber},${marginH},${marginH},${marginV},1`,
+    `Style: Default,${fontName},${fontSize},${primaryColour},${secondaryColour},${outlineColour},&HFF000000,0,0,0,0,100,100,0,0,1,2,0,${alignmentNumber},${marginH},${marginH},${marginV},1`,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',

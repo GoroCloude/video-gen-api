@@ -61,6 +61,35 @@ function resolveAlignment(pos) {
 }
 
 // ---------------------------------------------------------------------------
+// Font validation
+// ---------------------------------------------------------------------------
+const VALID_FONTS = [
+  'Arial',
+  'Arial Black',
+  'Bahnschrift',
+  'Calibri',
+  'Candara',
+  'Comic Sans MS',
+  'Consolas',
+  'Courier New',
+  'Georgia',
+  'Impact',
+  'Palatino Linotype',
+  'Segoe UI',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+];
+
+function validateFontName(name) {
+  if (!VALID_FONTS.includes(name)) {
+    throw new Error(`Invalid fontName "${name}". Valid values: ${VALID_FONTS.join(', ')}`);
+  }
+  return name;
+}
+
+// ---------------------------------------------------------------------------
 // Motion effect validation (fail-fast at startup)
 // ---------------------------------------------------------------------------
 const VALID_EFFECTS = ['none', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'ken-burns', 'shake'];
@@ -103,11 +132,11 @@ function resolveActiveAlignment(captionPositionOverride) {
  * @param {string}  [effectOverride] Per-request effect; falls back to VIDEO_EFFECT env var.
  * @returns {Promise<string>} Absolute path to the output .mp4 file
  */
-function composeVideo(imagePath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride) {
+function composeVideo(imagePath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride, fontNameOverride) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
     const activeEffect = effectOverride ?? config.video.effect;
-    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect, true);
+    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect, true, fontNameOverride);
 
     const proc = ffmpeg()
       .input(imagePath)
@@ -147,7 +176,7 @@ function composeVideo(imagePath, audioPath, subtitlePath, outputDir, durationSec
 // Filter chain builder
 // ---------------------------------------------------------------------------
 
-function buildVideoFilter(subtitlePath, durationSeconds, effect, fadeIn = false) {
+function buildVideoFilter(subtitlePath, durationSeconds, effect, fadeIn = false, fontNameOverride) {
   const hasMotion = effect !== 'none';
 
   // Pre-scale: 1× for static, OVERSCAN× for motion (gives zoompan room to work)
@@ -160,12 +189,14 @@ function buildVideoFilter(subtitlePath, durationSeconds, effect, fadeIn = false)
     `pad=${scaledW}:${scaledH}:(ow-iw)/2:(oh-ih)/2:black`;
 
   // ASS files carry all style info (including alignment) baked in — no force_style needed.
-  // SRT files (used by /generate-video) rely on force_style for font/color/position.
+  // SRT files rely on force_style for font/color/position.
+  const activeFontName = fontNameOverride ?? config.captions.fontName;
   const isAss = path.extname(subtitlePath).toLowerCase() === '.ass';
   const subtitleFilter = isAss
     ? `subtitles=${escapePath(subtitlePath)}`
     : `subtitles=${escapePath(subtitlePath)}:force_style=` +
-      `'FontSize=${fontSize},` +
+      `'Fontname=${activeFontName},` +
+      `FontSize=${fontSize},` +
       `PrimaryColour=${primaryColour},` +
       `OutlineColour=${outlineColour},` +
       `BorderStyle=1,Outline=2,` +
@@ -286,11 +317,11 @@ function buildMotionFilter(totalFrames, effect) {
  * @param {string} [effectOverride] Per-request effect; falls back to VIDEO_EFFECT env var
  * @returns {Promise<string>} Absolute path to the output .mp4 file
  */
-function overlayVideoWithTTS(videoPath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride) {
+function overlayVideoWithTTS(videoPath, audioPath, subtitlePath, outputDir, durationSeconds, effectOverride, fontNameOverride) {
   return new Promise((resolve, reject) => {
     const outPath = path.join(outputDir, `${randomUUID()}.mp4`);
     const activeEffect = effectOverride ?? config.video.effect;
-    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect);
+    const videoFilter = buildVideoFilter(subtitlePath, durationSeconds, activeEffect, false, fontNameOverride);
 
     const proc = ffmpeg()
       .input(videoPath)
@@ -368,4 +399,4 @@ function escapePath(p) {
   return "'" + p.replace(/\\/g, '/').replace(/:/g, '\\:') + "'";
 }
 
-module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment, VALID_EFFECTS, VALID_CAPTION_POSITIONS };
+module.exports = { composeVideo, overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, validateFontName, resolveActiveAlignment, VALID_EFFECTS, VALID_CAPTION_POSITIONS, VALID_FONTS };

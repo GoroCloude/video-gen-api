@@ -5,7 +5,7 @@ const fs = require('fs');
 const uploadVideo = require('../middleware/uploadVideo');
 const { generateTTS } = require('../services/tts');
 const { generateASS, generateWordByWordASS, VALID_CAPTION_STYLES, validateCaptionStyle } = require('../services/captions');
-const { overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment } = require('../services/composer');
+const { overlayVideoWithTTS, getAudioDuration, validateEffect, validateCaptionPosition, validateFontName, resolveActiveAlignment } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 const config = require('../config');
 
@@ -68,6 +68,14 @@ router.post('/', uploadVideo.single('video'), async (req, res, next) => {
     }
   }
 
+  // Optional per-request font name; falls back to CAPTION_FONT_NAME env var
+  const fontNameRaw = (req.body.fontName || '').trim() || null;
+  if (fontNameRaw) {
+    try { validateFontName(fontNameRaw); } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+  }
+
   try {
     log.info('Step 1/4 — TTS');
     const audioPath = await generateTTS(text, tmpDir);
@@ -79,11 +87,11 @@ router.post('/', uploadVideo.single('video'), async (req, res, next) => {
     log.info({ captionStyle: captionStyleRaw }, 'Step 3/4 — Generating captions');
     const alignmentNumber = resolveActiveAlignment(captionPositionRaw);
     const assPath = captionStyleRaw === 'word-by-word'
-      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride)
-      : generateASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride);
+      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride, fontNameRaw)
+      : generateASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride, fontNameRaw);
 
     log.info('Step 4/4 — Composing video');
-    const videoPath = await overlayVideoWithTTS(req.file.path, audioPath, assPath, tmpDir, duration, effectRaw);
+    const videoPath = await overlayVideoWithTTS(req.file.path, audioPath, assPath, tmpDir, duration, effectRaw, fontNameRaw);
 
     log.info('Uploading to storage');
     const key = `generated/${req.id}.mp4`;

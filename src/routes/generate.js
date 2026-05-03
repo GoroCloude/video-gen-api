@@ -5,7 +5,7 @@ const fs = require('fs');
 const upload = require('../middleware/upload');
 const { generateTTS } = require('../services/tts');
 const { generateASS, generateWordByWordASS, VALID_CAPTION_STYLES, validateCaptionStyle } = require('../services/captions');
-const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition, resolveActiveAlignment } = require('../services/composer');
+const { composeVideo, getAudioDuration, validateEffect, validateCaptionPosition, validateFontName, resolveActiveAlignment } = require('../services/composer');
 const { uploadToStorage } = require('../services/storage');
 const config = require('../config');
 
@@ -65,6 +65,14 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     }
   }
 
+  // Optional per-request font name; falls back to CAPTION_FONT_NAME env var
+  const fontNameRaw = (req.body.fontName || '').trim() || null;
+  if (fontNameRaw) {
+    try { validateFontName(fontNameRaw); } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+  }
+
   const generatedFiles = [];
 
   try {
@@ -79,12 +87,12 @@ router.post('/', upload.single('image'), async (req, res, next) => {
     log.info({ captionStyle: captionStyleRaw }, 'Step 3/4 — Generating captions');
     const alignmentNumber = resolveActiveAlignment(captionPositionRaw);
     const assPath = captionStyleRaw === 'word-by-word'
-      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride)
-      : generateASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride);
+      ? generateWordByWordASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride, fontNameRaw)
+      : generateASS(text, duration, tmpDir, alignmentNumber, fontSizeOverride, fontNameRaw);
     generatedFiles.push(assPath);
 
     log.info('Step 4/4 — Composing video');
-    const videoPath = await composeVideo(req.file.path, audioPath, assPath, tmpDir, duration, effectRaw);
+    const videoPath = await composeVideo(req.file.path, audioPath, assPath, tmpDir, duration, effectRaw, fontNameRaw);
     generatedFiles.push(videoPath);
 
     log.info('Uploading to storage');

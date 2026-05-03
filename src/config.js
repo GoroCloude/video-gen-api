@@ -68,6 +68,7 @@ const config = Object.freeze({
     position: optional('CAPTION_POSITION', 'bottom-center'),
     marginV: parseInt(optional('CAPTION_MARGIN_V', '80'), 10),   // vertical margin in pixels
     marginH: parseInt(optional('CAPTION_MARGIN_H', '10'), 10),   // horizontal margin in pixels
+    fontName: optional('CAPTION_FONT_NAME', 'Arial'),
   },
 
   upload: {

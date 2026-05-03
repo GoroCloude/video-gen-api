@@ -1,6 +1,6 @@
 'use strict';
 
-const { VALID_EFFECTS, VALID_CAPTION_POSITIONS } = require('./services/composer');
+const { VALID_EFFECTS, VALID_CAPTION_POSITIONS, VALID_FONTS } = require('./services/composer');
 const { VALID_TRANSITIONS } = require('./routes/combine');
 const { VALID_CAPTION_STYLES } = require('./services/captions');
 
@@ -121,6 +121,15 @@ const spec = {
                       'On a 1920 px tall video, size 7 ≈ 47 px. ' +
                       'Omit to use the server-level `CAPTION_FONT_SIZE` env var (default: 7).',
                     example: 7,
+                  },
+                  fontName: {
+                    type: 'string',
+                    enum: VALID_FONTS,
+                    default: 'Arial',
+                    description:
+                      'Caption font family name.\n\n' +
+                      'Omit to use the server-level `CAPTION_FONT_NAME` env var (default: `Arial`).',
+                    example: 'Impact',
                   },
                 },
               },
@@ -271,6 +280,15 @@ const spec = {
                       'On a 1920 px tall video, size 7 ≈ 47 px. ' +
                       'Omit to use the server-level `CAPTION_FONT_SIZE` env var (default: 7).',
                     example: 7,
+                  },
+                  fontName: {
+                    type: 'string',
+                    enum: VALID_FONTS,
+                    default: 'Arial',
+                    description:
+                      'Caption font family name.\n\n' +
+                      'Omit to use the server-level `CAPTION_FONT_NAME` env var (default: `Arial`).',
+                    example: 'Impact',
                   },
                 },
               },
